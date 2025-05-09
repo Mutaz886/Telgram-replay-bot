@@ -1,65 +1,32 @@
+from flask import Flask, request
+import requests
 
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-import json
-import os
+app = Flask(__name__)
 
-DATA_FILE = "replies.json"
+# توكن البوت
+TOKEN = "8023491013:AAEAvenCGf04hoCIEijkNa54p2_Lz8hZQLA"
+URL = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        replies = json.load(f)
-else:
-    replies = {}
+# ردود تلقائية
+replies = {
+    "مرحبا": "أهلاً وسهلاً! كيف أقدر أساعدك؟",
+    "السلام عليكم": "وعليكم السلام ورحمة الله وبركاته",
+    "من انت": "أنا بوت تلقائي بسيط!",
+    "كيفك": "الحمد لله، وانت؟"
+}
 
-def save_replies():
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(replies, f, ensure_ascii=False)
+@app.route("/", methods=["POST", "GET"])
+def index():
+    if request.method == "POST":
+        data = request.get_json()
+        if "message" in data and "text" in data["message"]:
+            chat_id = data["message"]["chat"]["id"]
+            text = data["message"]["text"].strip().lower()
+            if text in replies:
+                reply = replies[text]
+                requests.post(URL, json={"chat_id": chat_id, "text": reply})
+        return "ok"
+    return "Bot is running"
 
-async def add_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("استخدم الأمر: /add الكلمة=الرد")
-        return
-    try:
-        data = " ".join(context.args)
-        trigger, response = data.split("=")
-        replies[trigger.strip()] = response.strip()
-        save_replies()
-        await update.message.reply_text(f"تم إضافة الرد:
-إذا كتب حدا: {trigger}
-برد عليه: {response}")
-    except:
-        await update.message.reply_text("تأكد من الصيغة: /add الكلمة=الرد")
-
-async def delete_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("استخدم الأمر: /delete الكلمة")
-        return
-    trigger = " ".join(context.args).strip()
-    if trigger in replies:
-        del replies[trigger]
-        save_replies()
-        await update.message.reply_text(f"تم حذف الرد المرتبط بـ: {trigger}")
-    else:
-        await update.message.reply_text("ما لقيت رد مرتبط بهاي الكلمة.")
-
-async def list_replies(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not replies:
-        await update.message.reply_text("ما في ردود محفوظة حالياً.")
-    else:
-        text = "\n".join([f"{k} => {v}" for k, v in replies.items()])
-        await update.message.reply_text(f"الردود الحالية:\n{text}")
-
-async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message.text.strip()
-    if message in replies:
-        await update.message.reply_text(replies[message])
-
-app = ApplicationBuilder().token(os.getenv("BOT_TOKEN")).build()
-
-app.add_handler(CommandHandler("add", add_reply))
-app.add_handler(CommandHandler("delete", delete_reply))
-app.add_handler(CommandHandler("list", list_replies))
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), auto_reply))
-
-app.run_polling()
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
